@@ -1,143 +1,169 @@
+import chained_list as chained_list
+import queues as queue
 import discord
-import asyncio
+from discord.ext import commands
+from dotenv import load_dotenv
+import os
+# import youtube_dl
 
-client = discord.Client()
+DISCORD_TOKEN = os.getenv("discord_token")
+intents = discord.Intents.all()
+client = commands.Bot(command_prefix='!', intents=intents)
 
-TOKEN = config('TOKEN_DISCORD')
+# classe de stockage du message
 
-# Définir le canal pour l'historique
-channel_id = 1091262168713924620
 
-# Définir le nom du fichier d'historique
+class Message:
+    def __init__(self, text, user):
+        self.text = text
+        self.user = user
+
+    def __str__(self):
+        text_str = "%s :\n%s" % (self.user, self.text)
+        return text_str
+
+
+# Déclaration des variables
+history = chained_list.List_chained(Message("Welcome to the history", "Bot"))
+first_node = queue.Node(None, None, None)
+actual_history_node = history.first_node
+actual_history_name = None
+allowed_roles = ["Admin", "mod"]
 history_file = "history.txt"
 
-# Définir la réaction pour avancer dans l'historique
-next_emoji = "➡️"
+# class pour le help (a changer pour l'arbre binaire)
 
-# Définir la réaction pour reculer dans l'historique
-prev_emoji = "⬅️"
 
-# Définir la réaction pour supprimer un message de l'historique
-delete_emoji = "❌"
+class MyHelp(commands.HelpCommand):
+    async def send_bot_help(self, mapping):
+        embed = discord.Embed(title="Help")
+        for cog, commands in mapping.items():
+            command_signatures = [
+                self.get_command_signature(c) for c in commands]
+            if command_signatures:
+                cog_name = getattr(cog, "qualified_name", "No Category")
+                embed.add_field(name=cog_name, value="\n".join(
+                    command_signatures), inline=False)
 
-# Définir les autorisations pour l'accès à l'historique
-allowed_roles = ["Admin", "Modérateur"]
+        channel = self.get_destination()
+        await channel.send(embed=embed)
 
-# Dictionnaire pour stocker l'historique des messages de chaque utilisateur
-history = {}
 
-# Fonction pour ajouter un message à l'historique d'un utilisateur
-def add_to_history(message):
-    user_id = str(message.author.id)
-    if user_id not in history:
-        history[user_id] = []
-    history[user_id].append(message.content)
+client.help_command = MyHelp()
 
 # Fonction pour écrire l'historique dans un fichier texte
-def write_history_to_file():
-    with open(history_file, "w") as file:
-        for user_id, messages in history.items():
-            file.write(f"User {user_id}:\n")
-            for i, message in enumerate(messages):
-                file.write(f"{i+1}. {message}\n")
-            file.write("\n")
 
-# Fonction pour charger l'historique depuis un fichier texte
-def load_history_from_file():
-    with open(history_file, "r") as file:
-        user_id = ""
-        for line in file:
-            if line.startswith("User "):
-                user_id = line.split()[1].rstrip(":")
-                history[user_id] = []
-            elif user_id:
-                history[user_id].append(line.rstrip())
 
-# Événement pour récupérer les messages et les ajouter à l'historique
-@client.event
-async def on_message(message):
-    if message.channel.id == channel_id:
-        add_to_history(message)
+def write_history_to_file(message):
+    f = open(history_file, "a")
+    f.write(f"User {message.user}: {message.text} \n")
+    f.close
 
-# Événement pour réagir aux réactions et afficher les messages de l'historique
+# rajoute une réaction au message du bot pour naviguer dans l'historique
+
+
 @client.event
 async def on_reaction_add(reaction, user):
-    # Vérifier que la réaction est ajoutée sur un message du bot et que l'utilisateur est autorisé à accéder à l'historique
-    if user != client.user and reaction.message.author == client.user and any(role.name in allowed_roles for role in user.roles):
-        message = reaction.message
-        user_id = str(message.embeds[0].footer.text.split(": ")[1])
-        if reaction.emoji == next_emoji:
-            if user_id in history:
-                if message.embeds[0].title.startswith("Page "):
-                    index = int(message.embeds[0].title.split()[1])
+    emoji = reaction.emoji
+    global actual_history_node
+    global actual_history_name
+    if user.bot == client.user:
+        return
+    elif emoji == "❌" and "mod" in [y.name.lower() for y in user.roles]:
+        await reaction.message.delete()
+        return
+    elif emoji == "🔺" and "mod" in [y.name.lower() for y in user.roles]:
+        if actual_history_node.previous_node is not None:
+            actual_history_node = actual_history_node.previous_node
+            await reaction.message.edit(content=str(actual_history_node.data))
+        return
+    elif emoji == "🔻" and "mod" in [y.name.lower() for y in user.roles]:
+        if actual_history_node.following_node is not None:
+            actual_history_node = actual_history_node.following_node
+            await reaction.message.edit(content=str(actual_history_node.data))
+        return
+    elif emoji == "⏫" and "mod" in [y.name.lower() for y in user.roles]:
+        if actual_history_node.previous_node is not None:
+            actual_history_node = actual_history_node.previous_node
+            while actual_history_node.data.user != actual_history_name:
+                if actual_history_node.previous_node is not None:
+                    actual_history_node = actual_history_node.previous_node
+                    print(actual_history_node.data.user)
+                    print(actual_history_name)
                 else:
-                    index = 0
-                if index < len(history[user_id]) - 1:
-                    index += 1
-                    embed = discord.Embed(title=f"Page {index+1}/{len(history[user_id])}", description=history[user_id][index], color=discord.Color.blue())
-                    embed.set_footer(text=f"User ID: {user_id}")
-                    await message.edit(embed=embed)
-        elif reaction.emoji == prev_emoji:
-            if user_id in history:
-                if message.embeds[0].title.startswith("Page "):
-                    index = int(message.embeds[0].title.split()[1])
-            else:
-                index = len(history[user_id]) - 1
-            if index > 0:
-                index -= 1
-                embed = discord.Embed(title=f"Page {index+1}/{len(history[user_id])}", description=history[user_id][index], color=discord.Color.blue())
-                embed.set_footer(text=f"User ID: {user_id}")
-                await message.edit(embed=embed)
-        elif reaction.emoji == delete_emoji:
-            if user_id in history:
-                if message.embeds[0].title.startswith("Page "):
-                    index = int(message.embeds[0].title.split()[1]) - 1
-                    del history[user_id][index]
-                    write_history_to_file()
-                    if len(history[user_id]) == 0:
-                        del history[user_id]
-                        await message.delete()
+                    break
+            if actual_history_node.data.user == actual_history_name:
+                await reaction.message.edit(content=str(actual_history_node.data))
+        return
+    elif emoji == "⏬" and "mod" in [y.name.lower() for y in user.roles]:
+        if actual_history_node.following_node is not None:
+            actual_history_node = actual_history_node.following_node
+            while actual_history_node.data.user != actual_history_name:
+                if actual_history_node.following_node is not None:
+                    actual_history_node = actual_history_node.following_node
+                    print(actual_history_node.data.user)
+                    print(actual_history_name)
                 else:
-                    await message.add_reaction(delete_emoji)
-            
-# Commande pour afficher l'historique d'un utilisateur
-@client.command()
-async def history(ctx, user: discord.User):
-    user_id = str(user.id)
-    if any(role.name in allowed_roles for role in ctx.author.roles) or user_id == str(ctx.author.id):
-        if user_id in history:
-            embed = discord.Embed(title=f"Page 1/{len(history[user_id])}", description=history[user_id][0], color=discord.Color.blue())
-            embed.set_footer(text=f"User ID: {user_id}")
-            message = await ctx.send(embed=embed)
-            if len(history[user_id]) > 1:
-                await message.add_reaction(prev_emoji)
-                await message.add_reaction(next_emoji)
-                await message.add_reaction(delete_emoji)
-            else:
-                await ctx.send(f"No history found for user {user.mention}.")
+                    break
+            if actual_history_node.data.user == actual_history_name:
+                await reaction.message.edit(content=str(actual_history_node.data))
+        return
 
-# Commande pour télécharger l'historique d'un utilisateur
-@client.command()
-async def download(ctx, user: discord.User):
-user_id = str(user.id)
-    if any(role.name in allowed_roles for role in ctx.author.roles) or user_id == str(ctx.author.id):
-        if user_id in history:
-            with open(f"{user.name}_history.txt", "w") as file:
-                for i, message in enumerate(history[user_id]):
-                    file.write(f"{i+1}. {message}\n")
-            with open(f"{user.name}_history.txt", "rb") as file:
-                await ctx.send(f"Here is the history for {user.mention}.", file=discord.File(file, f"{user.name}_history.txt"))
-        else:
-            await ctx.send(f"No history found for user {user.mention}.")
-    else:
-        await ctx.send("You are not authorized to download histories.")
+# sauvegarde du message
 
+
+@client.command(pass_context=True)
+async def save(ctx, *, arg):
+    message = Message(arg, ctx.message.author.name)
+    history.append(message)
+    write_history_to_file(message)
+    await ctx.message.add_reaction("✅")
+
+
+# indique que le bot a démarré
 @client.event
 async def on_ready():
     print("Le bot est prêt !")
 
-# Chargement de l'historique depuis le fichier texte au démarrage
-load_history_from_file()
 
-# Boucle principale du bot
-client.run(TOKEN)
+@client.command()
+async def showH(ctx, arg):
+    global actual_history_node
+    if arg == "last":
+        message = await ctx.send(str(history.view(history.length-1)))
+    else:
+        index = int(arg)
+        actual_history_node = history.get(index)
+        message = await ctx.send(str(history.view(index)))
+    await message.add_reaction("🔺")
+    await message.add_reaction("🔻")
+    await message.add_reaction("❌")
+
+
+@client.command()
+async def userH(ctx, arg):
+    name = str(arg)
+    global actual_history_name
+    global actual_history_node
+    actual_history_node = history.get_from(name)
+    actual_history_name = name
+    message = await ctx.send(str(history.view_from(name)))
+    await message.add_reaction("⏫")
+    await message.add_reaction("🔺")
+    await message.add_reaction("🔻")
+    await message.add_reaction("⏬")
+    await message.add_reaction("❌")
+
+
+@client.command()
+async def clear(ctx):
+    history.clear(Message("First message", "Bot"))
+    await ctx.message.add_reaction("✅")
+
+
+@client.command()
+async def lenght(ctx):
+    await ctx.channel.send(str(history.length))
+    await ctx.message.add_reaction("✅")
+
+client.run("ODYyNDI0Njk0NTI3NDkyMTA2.Gy8R6w.V_XfvVA2rTE60FG6uIwi4SqEURoA5B_l-sy784")

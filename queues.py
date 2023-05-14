@@ -1,7 +1,8 @@
-class node:
-    def __init__(self,data):
+class Node:
+    def __init__(self, previous_node, following_node, data):
+        self.previous_node = previous_node
+        self.following_node = following_node
         self.data = data
-        self.next_node = None
 
 # class Node {
     
@@ -16,9 +17,9 @@ class node:
 
 # }
 
-class queue:
+class Queue:
   def __init__(self,data):
-    self.first_node = node(data)
+    self.first_node = Node(data)
     self.size = 1
 
   def __str__(self):
@@ -33,14 +34,14 @@ class queue:
 
   def push(self,data):
     if self.first_node == None:
-      self.first_node = node(data)
+      self.first_node = Node(data)
       return
 
     current_node = self.first_node
     while current_node.next_node != None:
       current_node = current_node.next_node
 
-    current_node.next_node = node(data)
+    current_node.next_node = Node(data)
     self.size += 1
 
   def pop(self):
