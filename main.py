@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import os
-# import youtube_dl
+import asyncio
 
 DISCORD_TOKEN = os.getenv("discord_token")
 intents = discord.Intents.all()
@@ -26,14 +26,26 @@ class Message:
 # Déclaration des variables
 history = chained_list.List_chained(Message("Welcome to the history", "Bot"))
 first_node = queue.Node(None, None, None)
-actual_history_node = history.first_node
-actual_history_name = None
+history_node = history.first_node
+history_name = None
 allowed_roles = ["Admin", "mod"]
 history_file = "history.txt"
+global fifo
+
+
+async def fifo(ctx):
+    # regarde si qqn dans fifo , sinon place Ã  la suite
+    if fifo.peek() is None:
+        fifo.push(ctx.author.id)
+    else:
+        if fifo.peek().data != ctx.author.id:
+            fifo.push(ctx.author.id)
+        if fifo.peek() is None:  # regarde si cest toujours null ou non
+            await ctx.send("You are not currently first in line. Please wait your turn.")
+            return
+
 
 # class pour le help (a changer pour l'arbre binaire)
-
-
 class MyHelp(commands.HelpCommand):
     async def send_bot_help(self, mapping):
         embed = discord.Embed(title="Help")
@@ -65,49 +77,50 @@ def write_history_to_file(message):
 @client.event
 async def on_reaction_add(reaction, user):
     emoji = reaction.emoji
-    global actual_history_node
-    global actual_history_name
+    global history_node
+    global history_name
     if user.bot == client.user:
         return
     elif emoji == "❌" and "mod" in [y.name.lower() for y in user.roles]:
         await reaction.message.delete()
         return
     elif emoji == "🔺" and "mod" in [y.name.lower() for y in user.roles]:
-        if actual_history_node.previous_node is not None:
-            actual_history_node = actual_history_node.previous_node
-            await reaction.message.edit(content=str(actual_history_node.data))
+        if history_node.previous_node is not None:
+            history_node = history_node.previous_node
+            await reaction.message.edit(content=str(history_node.data))
         return
     elif emoji == "🔻" and "mod" in [y.name.lower() for y in user.roles]:
-        if actual_history_node.following_node is not None:
-            actual_history_node = actual_history_node.following_node
-            await reaction.message.edit(content=str(actual_history_node.data))
+        if history_node.following_node is not None:
+            history_node = history_node.following_node
+            await reaction.message.edit(content=str(history_node.data))
         return
     elif emoji == "⏫" and "mod" in [y.name.lower() for y in user.roles]:
-        if actual_history_node.previous_node is not None:
-            actual_history_node = actual_history_node.previous_node
-            while actual_history_node.data.user != actual_history_name:
-                if actual_history_node.previous_node is not None:
-                    actual_history_node = actual_history_node.previous_node
-                    print(actual_history_node.data.user)
-                    print(actual_history_name)
+        if history_node.previous_node is not None:
+            history_node = history_node.previous_node
+            while history_node.data.user != history_name:
+                if history_node.previous_node is not None:
+                    history_node = history_node.previous_node
+                    print(history_node.data.user)
+                    print(history_name)
                 else:
                     break
-            if actual_history_node.data.user == actual_history_name:
-                await reaction.message.edit(content=str(actual_history_node.data))
+            if history_node.data.user == history_name:
+                await reaction.message.edit(content=str(history_node.data))
         return
     elif emoji == "⏬" and "mod" in [y.name.lower() for y in user.roles]:
-        if actual_history_node.following_node is not None:
-            actual_history_node = actual_history_node.following_node
-            while actual_history_node.data.user != actual_history_name:
-                if actual_history_node.following_node is not None:
-                    actual_history_node = actual_history_node.following_node
-                    print(actual_history_node.data.user)
-                    print(actual_history_name)
+        if history_node.following_node is not None:
+            history_node = history_node.following_node
+            while history_node.data.user != history_name:
+                if history_node.following_node is not None:
+                    history_node = history_node.following_node
+                    print(history_node.data.user)
+                    print(history_name)
                 else:
                     break
-            if actual_history_node.data.user == actual_history_name:
-                await reaction.message.edit(content=str(actual_history_node.data))
+            if history_node.data.user == history_name:
+                await reaction.message.edit(content=str(history_node.data))
         return
+    await fifo(user)
 
 # sauvegarde du message
 
@@ -118,6 +131,8 @@ async def save(ctx, *, arg):
     history.append(message)
     write_history_to_file(message)
     await ctx.message.add_reaction("✅")
+    await fifo(ctx)
+    fifo.pop()
 
 
 # indique que le bot a démarré
@@ -128,42 +143,82 @@ async def on_ready():
 
 @client.command()
 async def showH(ctx, arg):
-    global actual_history_node
+    global history_node
     if arg == "last":
         message = await ctx.send(str(history.view(history.length-1)))
     else:
         index = int(arg)
-        actual_history_node = history.get(index)
+        history_node = history.get(index)
         message = await ctx.send(str(history.view(index)))
     await message.add_reaction("🔺")
     await message.add_reaction("🔻")
     await message.add_reaction("❌")
+    await fifo(ctx)
+    fifo.pop()
 
 
 @client.command()
 async def userH(ctx, arg):
     name = str(arg)
-    global actual_history_name
-    global actual_history_node
-    actual_history_node = history.get_from(name)
-    actual_history_name = name
+    global history_name
+    global history_node
+    history_node = history.get_from(name)
+    history_name = name
     message = await ctx.send(str(history.view_from(name)))
     await message.add_reaction("⏫")
     await message.add_reaction("🔺")
     await message.add_reaction("🔻")
     await message.add_reaction("⏬")
     await message.add_reaction("❌")
+    await fifo(ctx)
+    fifo.pop()
 
 
 @client.command()
 async def clear(ctx):
     history.clear(Message("First message", "Bot"))
     await ctx.message.add_reaction("✅")
+    f = open(history_file, "w")
+    f.write("")
+    f.close
+    await fifo(ctx)
+    fifo.pop()
 
 
 @client.command()
 async def lenght(ctx):
     await ctx.channel.send(str(history.length))
     await ctx.message.add_reaction("✅")
+    await fifo(ctx)
+    fifo.pop()
+
+
+@client.command()
+async def play(ctx):
+    if ctx.author.voice is None:
+        await ctx.channel.send("You need to join a voice channel first.")
+        return
+
+        # Get the voice channel of the user who sent the command
+    voice_channel = ctx.author.voice.channel
+
+    # Join the voice channel
+    voice_client = await voice_channel.connect()
+
+    # Get the path to the MP3 file
+    file_path = os.path.join(os.getcwd(), "ouf.mp3")
+
+    # Play the MP3 file
+    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(file_path))
+    voice_client.play(source)
+
+    # Wait for the audio to finish playing
+    while voice_client.is_playing():
+        await asyncio.sleep(1)
+
+        # Disconnect from the voice channel
+    await voice_client.disconnect()
+    await fifo(ctx)
+    fifo.pop()
 
 client.run("ODYyNDI0Njk0NTI3NDkyMTA2.Gy8R6w.V_XfvVA2rTE60FG6uIwi4SqEURoA5B_l-sy784")
