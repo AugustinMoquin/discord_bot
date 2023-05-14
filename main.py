@@ -195,29 +195,28 @@ async def lenght(ctx):
 
 @client.command()
 async def play(ctx):
-    if ctx.author.voice is None:
-        await ctx.channel.send("You need to join a voice channel first.")
-        return
-
-        # Get the voice channel of the user who sent the command
-    voice_channel = ctx.author.voice.channel
-
-    # Join the voice channel
-    voice_client = await voice_channel.connect()
-
-    # Get the path to the MP3 file
-    file_path = os.path.join(os.getcwd(), "ouf.mp3")
-
-    # Play the MP3 file
-    source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(file_path))
-    voice_client.play(source)
-
-    # Wait for the audio to finish playing
-    while voice_client.is_playing():
-        await asyncio.sleep(1)
-
-        # Disconnect from the voice channel
-    await voice_client.disconnect()
+    # grab the user who sent the command
+    user = ctx.message.author
+    voice_channel = user.voice.voice_channel
+    channel = None
+    # only play music if user is in a voice channel
+    if voice_channel != None:
+        # grab user's voice channel
+        channel = voice_channel.name
+        await client.say('User is in channel: ' + channel)
+        # create StreamPlayer
+        vc = await client.join_voice_channel(voice_channel)
+        player = vc.create_ffmpeg_player(
+            'ouf.mp3', after=lambda: print('done'))
+        player.start()
+        while not player.is_done():
+            await asyncio.sleep(1)
+        # disconnect after the player has finished
+        player.stop()
+        await vc.disconnect()
+    else:
+        await client.say('User is not in a channel.')
+        
     await fifo(ctx)
     fifo.pop()
 
