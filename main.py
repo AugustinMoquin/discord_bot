@@ -2,7 +2,8 @@ import chained_list as chained_list
 import queues as queue
 import tree as tree
 import discord
-# import discord_components
+import random
+import requests
 from discord.ext import commands
 import os
 import asyncio
@@ -11,7 +12,7 @@ DISCORD_TOKEN = os.getenv("discord_token")
 intents = discord.Intents.all()
 client = commands.Bot(command_prefix='!', intents=intents)
 
-######## DECLARATION VAR ########
+######## DECLARATION VAR ET CLASSES ########
 
 
 class Message:
@@ -23,8 +24,6 @@ class Message:
         text_str = "%s :\n%s" % (self.user, self.text)
         return text_str
 
-
-# Déclaration des variables
 history = chained_list.List_chained(Message("Welcome to the history", "Bot"))
 first_node = queue.Node(None, None, None)
 history_node = history.first_node
@@ -39,8 +38,9 @@ global isUsing
 
 @client.command()
 async def start(ctx):
-    message1 = await ctx.send("Bienvenue ! Prêt à parler de recettes de desserts ? Réagissez avec ✅ pour commencer.")
+    message1 = await ctx.send("Bienvenue ! Prêt à parler de desserts ??? Réagissez avec ✅ pour commencer.")
     await message1.add_reaction("✅")
+    await message1.add_reaction("❌")
 
     def check(reaction, user):
         return user == ctx.message.author and str(reaction.emoji) == '✅'
@@ -77,6 +77,8 @@ async def start(ctx):
         message2 = await ctx.send(f"{current_node.left.state} / {current_node.right.state}")
         await message2.add_reaction(current_node.symbolL)
         await message2.add_reaction(current_node.symbolR)
+        await message2.add_reaction("❌")
+
 
         
         def check_response(reaction, user):
@@ -101,9 +103,11 @@ async def start(ctx):
             break
 
 
-######## FONCTION ########
+######## FIN ARBRE BINAIRE ########
 
-# class pour le help (a changer pour l'arbre binaire)
+######## FONCTIONS ########
+
+#FONCTION PAR DEFAULT
 class MyHelp(commands.HelpCommand):
     async def send_bot_help(self, mapping):
         embed = discord.Embed(title="Help")
@@ -122,18 +126,14 @@ class MyHelp(commands.HelpCommand):
 client.help_command = MyHelp()
 
 # Fonction pour écrire l'historique dans un fichier texte
-
-
 def write_history_to_file(message):
     f = open(history_file, "a")
-    f.write(f"User {message.user}: {message.text} \n")
+    f.write(f"User :{message.user}: {message.text} \n")
     f.close
 
 ######## EVENT ET COMMANDE ########
 
 # rajoute une réaction au message du bot pour naviguer dans l'historiquE
-
-
 @client.event
 async def on_reaction_add(reaction, user):
     emoji = reaction.emoji
@@ -157,8 +157,6 @@ async def on_reaction_add(reaction, user):
         
 
 # sauvegarde du message
-
-
 @client.command(pass_context=True)
 async def save(ctx, *, arg):
     message = Message(arg, ctx.message.author.name)
@@ -166,19 +164,11 @@ async def save(ctx, *, arg):
     write_history_to_file(message)
 
 # indique que le bot a démarré
-
-
 @client.event
 async def on_ready():
     print("Le bot est prêt !")
 
-
-# @client.slash_command()  # Create a slash command
-# async def button(ctx):
-#     # Send a message with our View class that contains the button
-#     await ctx.respond("This is a button!", view=MyView())
-
-
+#affiche l'historique etpermet de naviguer dedans 
 @client.command()
 async def showH(ctx, arg):
     if isUsed == False:
@@ -198,6 +188,7 @@ async def showH(ctx, arg):
         ctx.send(f"the history is in use by {isUsing}")
 
 
+#clear tout l'historique
 @client.command()
 async def clear(ctx):
     history.clear(Message("First message", "Bot"))
@@ -206,11 +197,12 @@ async def clear(ctx):
     f.close
 
 
+#récupère la lingeur de l'historique
 @client.command()
 async def lenght(ctx):
     await ctx.channel.send(str(history.length))
 
-
+#joue le chef d'oeuvre mauvaise foi nocturne de fatal
 @client.command()
 async def play(ctx):
     if ctx.author.voice is None:
@@ -237,9 +229,60 @@ async def play(ctx):
         # Disconnect from the voice channel
     await voice_client.disconnect()
 
-# permet de telechrager l'historique
 
+#récupère et envoie une phot au hasard d'un chat tres mignon
+@client.command()
+async def randomcat(ctx):
+    if ctx.message.author == client.user:
+        return
 
+    response = requests.get('https://api.thecatapi.com/v1/images/search')
+    if response.status_code == 200:
+        data = response.json()
+        image_url = data[0]['url']
+        embed = discord.Embed()
+        embed.set_image(url=image_url)
+        await ctx.message.channel.send(embed=embed)
+    else:
+        await ctx.message.channel.send('Failed to fetch random cat image.')
+
+@client.command()
+async def shifumi(ctx):
+    choosed = 0
+    rand = random.randint(1, 3)
+
+    message = await ctx.send("okay lets play")
+    await message.add_reaction("✂️")
+    await message.add_reaction("🧻")
+    await message.add_reaction("🪨")
+    await message.add_reaction("❌")
+
+    def check_response(reaction, user):
+            return user == ctx.message.author and str(reaction.emoji) in ['✂️', "🧻", "🪨"]
+
+    try:
+        reaction, user = await client.wait_for('reaction_add', timeout=60.0, check=check_response)
+    except:
+        await ctx.send("Délai d'attente dépassé. Veuillez réessayer.")
+        return
+    
+    if str(reaction.emoji)  == '✂️':
+        choosed = 1
+    elif str(reaction.emoji)  == "🧻":
+        choosed = 2
+    elif str(reaction.emoji)  == "🪨":
+        choosed = 3
+    else:
+        await ctx.send("Je suis désolé, je ne comprends pas votre réponse.")
+
+    if(rand == choosed):
+        await ctx.send("egalité")
+    elif((rand == 1 and choosed == 2) or (rand == 2 and choosed == 3) or (rand == 3 and choosed == 1)):
+        await ctx.send("perdu")
+    elif((rand == 2 and choosed == 1) or (rand == 3 and choosed == 2) or (rand == 1 and choosed == 3)):
+        await ctx.send("gagné")
+
+# permet de telechrager l'historique (pas fini)
 @client.command()
 async def dl(ctx, arg):
     user: discord.User
@@ -249,7 +292,8 @@ async def dl(ctx, arg):
     if any(role.name in allowed_roles for role in ctx.author.roles) or user == ctx.author.name:
         if history_node.following_node is not None:
             history_node = history_node.following_node
-            for i in history.length:
+            for i, sentence in enumerate(history.text):
+                result = sentence.split(':')
                 if history_node.following_node is not None:
                     history_node = history_node.following_node
                     if history_node.data.user == user:
@@ -264,4 +308,4 @@ async def dl(ctx, arg):
         await ctx.send("You are not authorized to download histories.")
 
 
-client.run("ODYyNDI0Njk0NTI3NDkyMTA2.Gy8R6w.V_XfvVA2rTE60FG6uIwi4SqEURoA5B_l-sy784")
+client.run("YOUR TOKEN HERE")

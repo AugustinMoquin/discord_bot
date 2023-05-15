@@ -1,0 +1,15 @@
+BOT DISCORD
+
+FAIT : 
+- historique
+- bot qui rejoint le vocal et fait un son
+- bot qui envoie une photo de chat au hasard
+- permet de telecharger l'historique personnel (non fini)
+- stockage de données dans un fichier externe
+- arbre binaire
+- lock sur le nombre d'utilisateur de l'historique
+- pierre feuille ciseaux (il est pas mal)
+
+NON FAIT :
+- hashmap
+- prendre le gouté
