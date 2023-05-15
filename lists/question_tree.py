@@ -1,4 +1,3 @@
-from tree.py import node  
 
 class node : 
   def __init__(self, question, reponses):
